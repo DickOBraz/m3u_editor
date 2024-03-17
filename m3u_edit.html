@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <script src="https://raw.githack.com/SortableJS/Sortable/master/Sortable.js"></script>
+
+
+    <title>M3U Editor</title>
+
+    <style>
+        .connectedSortable {
+            min-height: 500px;
+            max-height: 500px;
+            overflow-y: scroll;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            list-style-type: none;
+            padding: 10px;
+            margin: 0;
+        }
+
+        .selected {
+            background-color: #f9c7c8;
+            border: solid red 1px;
+        }
+
+        .connectedSortable li {
+            margin: 5px;
+            padding: 10px;
+            /* cursor: move; */
+        }
+
+        .connectedSortable li.ui-state-highlight {
+            height: 1.5em;
+            line-height: 1.2em;
+        }
+        .list-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .list {
+            width: 200px;
+            min-height: 200px;
+            max-height: 500px;
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+
+        img {
+            width: 40px;
+            height: 40px;
+            margin-right: 5px;
+        }
+
+        .list-group-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-6">
+            <h3>Ulazni podaci</h3>
+            <form id="uploadForm">
+                <input type="file" id="m3uFile" accept=".m3u">
+                <button type="button" class="btn btn-primary mt-2" onclick="parseM3U()">Parsiraj</button>
+                <label class="col-md-6">Filter: <input type="text" name="filter" id="filter" class="col-md-6"/></label>
+            </form>
+            <ul id="ulazniPodaci" class="list-group mt-4 connectedSortable ulazniPodaci"></ul>
+            <div id="pagination" class="md-4 pagination"></div>
+        </div>
+        <div class="col-md-6">
+            <h3>Izlazni podaci</h3>
+            <button type="button" class="btn btn-success mt-2" onclick="exportM3U()">Export</button>
+            <ul id="izlazniPodaci" class="list-group mt-4 connectedSortable"></ul>
+        </div>
+    </div>
+</div>
+
+<script>
+
+    class Paginator {
+        #options;
+        #numOfPages = 0;
+        #selectedPage = 1;
+
+        constructor(options) {
+            this.#options = options;
+        }
+
+        paginate() {
+            if (this.#options.listArr.length > 0) {
+                this.#numOfPages = Math.ceil(this.#options.listArr.length / this.#options.itemPerPage);
+                if (this.#selectedPage >= this.#numOfPages) {
+                    this.#setPageNum(this.#numOfPages);
+                }
+                this.#createPaginationBtns();
+            }
+        }
+
+        updateData(inArr) {
+            if (Array.isArray(inArr) && inArr.length > 0) {
+                this.#options.listArr = inArr;
+                this.paginate();
+            }
+        }
+
+        #renderData() {
+            let startIndex = (this.#selectedPage - 1) * this.#options.itemPerPage;
+            let endIndex = startIndex + this.#options.itemPerPage;
+            if (startIndex < 0) {
+                startIndex = 0;
+            }
+            if (endIndex > this.#options.listArr.length) {
+                endIndex = this.#options.listArr.length;
+            }
+            const showData = this.#options.listArr.slice(startIndex, endIndex);
+            this.#options.renderEl.innerHTML = this.#options.renderFn(showData);
+        }
+
+        #createPaginationBtns() {
+            let html = '';
+            let totalBtn = 5;
+            let startPageBtn = this.#selectedPage > 1 ? this.#selectedPage - 1 : 1;
+            let endPageBtn = startPageBtn + totalBtn - 1;
+            let insertBeforeFiller = false;
+            let insertAfterFiller = false;
+
+            if (endPageBtn >= this.#numOfPages) {
+                endPageBtn = this.#numOfPages;
+                startPageBtn = endPageBtn - totalBtn - 1;
+            }
+
+            if (startPageBtn > 1) {
+                insertBeforeFiller = true;
+            }
+
+            if (endPageBtn < this.#numOfPages) {
+                insertAfterFiller = true;
+            }
+            if (endPageBtn < startPageBtn) {
+                endPageBtn = startPageBtn;
+            }
+            if (startPageBtn < 1) {
+                startPageBtn = 1;
+            }
+
+            html+= `<div class="pagination-btn">
+                <button type="button" data-index="first">«</button>
+                ${insertBeforeFiller ? '<button type="button" data-index="prev">‹</button>' : '' }`;
+            if (insertBeforeFiller) {
+                html+= `<button type="button" data-index="disabled">...</button>`;
+            }
+            for (var i=startPageBtn; i<=endPageBtn;i++) {
+                html+= `<button type="button" data-index="${i}" class="${i==this.#selectedPage ? 'selected' : ''}">${i}</button>`;
+            }
+            if (insertAfterFiller) {
+                html+= `<button type="button" data-index="disabled">...</button>`;
+            }
+            html+= `${insertAfterFiller ? '<button type="button" data-index="next">›</button>' : '' }
+            <button type="button" data-index="last">»</button>
+            </">`;
+
+            if (this.#options.paginationEl) {
+                this.#options.paginationEl.innerHTML = html;
+                this.#renderData();
+                this.#addListeners();
+            }
+        }
+
+        #setPageNum(pageNum) {
+            this.#selectedPage = pageNum;
+        }
+
+        #clickHandler(event) {
+            if (event.target.hasAttribute('data-index')) {
+                let dataIndex = event.target.getAttribute('data-index');
+                let currentPageNum = this.#selectedPage;
+                switch(dataIndex) {
+                    case 'first' :
+                        currentPageNum = 1;
+                        break;
+                    case 'last' :
+                        currentPageNum = this.#numOfPages;
+                    break;
+                    case 'prev' :
+                        currentPageNum = currentPageNum - 1;
+                    break;
+                    case 'next' :
+                        currentPageNum = currentPageNum + 1;
+                    break;
+                    default:
+                        let pageNum = parseInt(dataIndex);
+                        currentPageNum = pageNum;
+                        break;
+                }
+                this.#setPageNum(currentPageNum);
+                this.#createPaginationBtns();
+            }
+        }
+
+        #addListeners() {
+            let btnEL = document.getElementsByClassName("pagination-btn");
+            for (var i = 0; i < btnEL.length; i++) {
+                btnEL[i].addEventListener('click', (e) => {this.#clickHandler(e); }, false);
+            }
+        }
+
+    }
+
+    var ulazniPodaciList = [];
+    let dataPaging;
+    let filterData = [];
+    let filterApplied = false;
+
+    const dataRenderFn = (dataPage) => {
+        return `${dataPage
+        .map(
+            (item) =>
+            `<li id="${item['id']}" class="list-group-item" draggable="true" x-data="${escape(JSON.stringify(item))}">
+                ${item['tvg-logo'] ? '<img src="' + item['tvg-logo'] + '" alt="Logo">' : ''}
+                <span>${item['tvg-name']}</span>
+                <span>${item['group-title']}</span>
+            </li>`
+        )
+        .join('')}`;
+    };
+
+    const options = {
+        itemPerPage: 10,
+        listArr: ulazniPodaciList || [],
+        renderFn: dataRenderFn,
+        renderEl: document.getElementById("ulazniPodaci"),
+        paginationEl: document.getElementById("pagination")
+    };
+    paginator = new Paginator(options);
+    paginator.paginate();
+
+
+    document.getElementById('filter').addEventListener('keyup', (e) => {
+        if (ulazniPodaciList.length > 0 ) {
+            const filterVal = document.getElementById('filter').value;
+            if (filterVal.length > 0) {
+                filterApplied = true;
+                filterData = ulazniPodaciList.filter((item) => (item['tvg-name'].toLowerCase().includes(filterVal) || item['group-title'].toLowerCase().includes(filterVal)));
+                paginator.updateData(filterData);
+            } else {
+                filterApplied = false;
+                paginator.updateData(ulazniPodaciList);
+            }
+        }
+    });
+
+
+    if (window.CustomEvent) {
+        window.addEventListener('sort', (e) => {
+            detectAction(e);
+            const actionParams = detectAction(e);
+            switch (actionParams['action']) {
+                case 'delete':
+                    deleteItem(actionParams['itemId']);
+                    if (filterApplied) {
+                        deleteItemFilter(actionParams['itemId']);
+                    }
+                break;
+                case 'add':
+                    addItem(actionParams, e.item);
+                    if (filterApplied) {
+                        addItemFilter(actionParams, e.item);
+                    }
+                break;
+                case 'reorder':
+                    deleteItem(actionParams['itemId']);
+                    addItem(actionParams, e.item);
+                    if (filterApplied) {
+                        deleteItemFilter(actionParams['itemId']);
+                        addItemFilter(actionParams, e.item);
+                    }
+                break;
+
+            }
+            if (filterApplied) {
+                paginator.updateData(filterData);
+            } else {
+                paginator.updateData(ulazniPodaciList);
+            }
+        });
+    }
+
+    function deleteItem(itemId){
+        const foundIndex = ulazniPodaciList.findIndex((item) => item['id'] === itemId);
+        if (foundIndex >= 0) {
+            ulazniPodaciList.splice(foundIndex, 1);
+        }
+    }
+
+    function deleteItemFilter(itemId){
+        const foundIndex = filterData.findIndex((item) => item['id'] === itemId);
+        if (foundIndex >= 0) {
+            filterData.splice(foundIndex, 1);
+        }
+    }
+
+    function addItem(params, itemEl){
+        const foundIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['itemId']);
+        if (foundIndex === -1) {  // not found
+            const jsonString = unescape(itemEl.getAttribute('x-data'));
+            const jsonObject = JSON.parse(jsonString);
+            if (params['prevSiblingId'] === null && params['nextSiblingId'] !== null) {
+                const foundNextIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['nextSiblingId']);
+                if (foundNextIndex !== -1) {
+                    if (foundNextIndex > 0) {
+                        ulazniPodaciList.splice(foundNextIndex - 1, 0, jsonObject);
+                    } else {
+                        ulazniPodaciList.splice(foundNextIndex, 0, jsonObject);
+                    }
+                }
+            }
+            if (params['nextSiblingId'] === null && params['prevSiblingId'] !== null) {
+                const foundPrevIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['prevSiblingId']);
+                if (foundPrevIndex !== -1) {
+                    ulazniPodaciList.splice(foundPrevIndex + 1, 0, jsonObject);
+                }
+            }
+            if (params['prevSiblingId'] !== null && params['nextSiblingId'] !== null) {
+                const foundPrevIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['prevSiblingId']);
+                // let foundNextIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['nextSiblingId']);
+                if (foundPrevIndex !== -1) {
+                    ulazniPodaciList.splice(foundPrevIndex + 1, 0, jsonObject);
+                }
+            }
+        }
+    }
+
+    function addItemFilter(params, itemEl){
+        const foundIndex = filterData.findIndex((item) => item['id'] === params['itemId']);
+        if (foundIndex === -1) {  // not found
+            const jsonString = unescape(itemEl.getAttribute('x-data'));
+            const jsonObject = JSON.parse(jsonString);
+            if (params['prevSiblingId'] === null && params['nextSiblingId'] !== null) {
+                const foundNextIndex = filterData.findIndex((item) => item['id'] === params['nextSiblingId']);
+                if (foundNextIndex !== -1) {
+                    if (foundNextIndex > 0) {
+                        filterData.splice(foundNextIndex - 1, 0, jsonObject);
+                    } else {
+                        filterData.splice(foundNextIndex, 0, jsonObject);
+                    }
+                }
+            }
+            if (params['nextSiblingId'] === null && params['prevSiblingId'] !== null) {
+                const foundPrevIndex = filterData.findIndex((item) => item['id'] === params['prevSiblingId']);
+                if (foundPrevIndex !== -1) {
+                    filterData.splice(foundPrevIndex + 1, 0, jsonObject);
+                }
+            }
+            if (params['prevSiblingId'] !== null && params['nextSiblingId'] !== null) {
+                const foundPrevIndex = filterData.findIndex((item) => item['id'] === params['prevSiblingId']);
+                if (foundPrevIndex !== -1) {
+                    filterData.splice(foundPrevIndex + 1, 0, jsonObject);
+                }
+            }
+        }
+    }
+
+    function detectAction(event) {
+        const fromElId = event.from.getAttribute('id');
+        const toElId = event.to.getAttribute('id');
+        const itemElId = event.item.getAttribute('id');
+        const itemNewIndex = event.newIndex;
+        const inputListEl = document.getElementById("ulazniPodaci");
+        let prevSiblingElId = null;
+        let nextSiblingElId = null;
+
+        if (itemNewIndex > 0) {
+            prevSiblingElId = inputListEl.children[itemNewIndex-1].getAttribute('id');
+        }
+        if (itemNewIndex < inputListEl.children.length - 1) {
+            nextSiblingElId = inputListEl.children[itemNewIndex+1].getAttribute('id');
+        }
+
+        let action = '';
+        if (fromElId === 'ulazniPodaci' && toElId === 'izlazniPodaci') {
+            action = 'delete';
+        }
+        if (fromElId === 'izlazniPodaci' && toElId === 'ulazniPodaci') {
+            action = 'add';
+        }
+        if (fromElId === 'ulazniPodaci' && toElId === 'ulazniPodaci') {
+            action = 'reorder';
+        }
+        return {
+            action: action,
+            itemId: itemElId,
+            nextSiblingId: nextSiblingElId,
+            prevSiblingId: prevSiblingElId
+        }
+    }
+
+
+    function generateId(item, index) {
+        let idString = index + '_' + item['tvg-id'] + item['tvg-name'] + item['group-title'];
+        idString = idString.replace(/\W/g,'');
+        return idString;
+    }
+
+    function parseM3U() {
+        var input = document.getElementById('m3uFile');
+
+        if (input.files.length === 0) {
+            alert("Molimo vas da izaberete M3U datoteku.");
+            return;
+        }
+
+        var file = input.files[0];
+        var reader = new FileReader();
+
+        reader.onload = function (e) {
+            var m3uContent = e.target.result;
+            ulazniPodaciList = parseM3UContent(m3uContent);
+            paginator.updateData(ulazniPodaciList);
+        };
+
+        reader.readAsText(file);
+    }
+
+    function parseM3UContent(content) {
+        var lines = content.split('\n');
+        var entries = [];
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (line.startsWith('#EXTINF')) {
+                var entry = parseExtInf(line);
+                entry['originalItem'] = line + "\n" + lines[i+1].trim();
+                entry['id'] = generateId(entry, i);
+                entries.push(entry);
+            }
+        }
+
+        return entries;
+    }
+
+    function parseExtInf(line) {
+        var entry = {};
+        var attributes = line.match(/([^\s="]+="[^"]*")/g);
+
+        if (attributes) {
+            attributes.forEach(function (attribute) {
+                var parts = attribute.split('=');
+                entry[parts[0]] = parts[1].replace(/"/g, '');
+            });
+        }
+        return entry;
+    }
+
+    function exportM3U() {
+        var m3uContent = '';
+        var outputContainer = document.getElementById('izlazniPodaci');
+        for (const child of outputContainer.children) {
+            if (child.hasAttribute('x-data')) {
+                var jsonString = unescape(child.getAttribute('x-data'));
+                var jsonObject = JSON.parse(jsonString);
+                m3uContent +=  jsonObject['originalItem'] + "\n";
+            }
+        }
+
+        var blob = new Blob([m3uContent], { type: 'text/plain' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'output.m3u';
+        a.click();
+    }
+
+    Sortable.create(izlazniPodaci, {
+        group: 'shared',
+        animation: 100
+    });
+
+    Sortable.create(ulazniPodaci, {
+        group: 'shared',
+        animation: 100
+    });
+</script>
+
+</body>
+</html>
