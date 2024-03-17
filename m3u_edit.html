@@ -73,7 +73,7 @@
             <form id="uploadForm">
                 <input type="file" id="m3uFile" accept=".m3u">
                 <button type="button" class="btn btn-primary mt-2" onclick="parseM3U()">Parsiraj</button>
-                <label class="col-md-6">Filter: <input type="text" name="filter" id="filter" class="col-md-6"/></label>
+                <label class="mt-4">Filter: <input type="text" name="filter" id="filter" class="col-md-8"/></label>
             </form>
             <ul id="ulazniPodaci" class="list-group mt-4 connectedSortable ulazniPodaci"></ul>
             <div id="pagination" class="md-4 pagination"></div>
@@ -81,6 +81,7 @@
         <div class="col-md-6">
             <h3>Izlazni podaci</h3>
             <button type="button" class="btn btn-success mt-2" onclick="exportM3U()">Export</button>
+            <div class="mt-4">Output m3u list:</div>
             <ul id="izlazniPodaci" class="list-group mt-4 connectedSortable"></ul>
         </div>
     </div>
@@ -236,7 +237,7 @@
     };
 
     const options = {
-        itemPerPage: 10,
+        itemPerPage: 100,
         listArr: ulazniPodaciList || [],
         renderFn: dataRenderFn,
         renderEl: document.getElementById("ulazniPodaci"),
@@ -463,7 +464,7 @@
     }
 
     function exportM3U() {
-        var m3uContent = '';
+        var m3uContent = "#EXTM3U\n";
         var outputContainer = document.getElementById('izlazniPodaci');
         for (const child of outputContainer.children) {
             if (child.hasAttribute('x-data')) {
