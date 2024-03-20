@@ -21,7 +21,7 @@
             margin: 0;
         }
 
-        .selected {
+        .sortable-selected, .selected {
             background-color: #f9c7c8;
             border: solid red 1px;
         }
@@ -86,6 +86,7 @@
         </div>
     </div>
 </div>
+<span id="clickSimulator"></span>
 
 <script>
 
@@ -263,37 +264,49 @@
 
 
     if (window.CustomEvent) {
-        window.addEventListener('sort', (e) => {
-            detectAction(e);
+        window.addEventListener('end', (e) => {
+            let eventItems = [];
+            if (e.items.length > 0) {
+                eventItems = e.items;
+            } else {
+                eventItems.push(e.item);
+            }
             const actionParams = detectAction(e);
             switch (actionParams['action']) {
                 case 'delete':
-                    deleteItem(actionParams['itemId']);
-                    if (filterApplied) {
-                        deleteItemFilter(actionParams['itemId']);
-                    }
+                    actionParams['itemIds'].forEach((itemId) => {
+                        deleteItem(itemId);
+                        if (filterApplied) {
+                            deleteItemFilter(item);
+                        }
+                    });
                 break;
                 case 'add':
-                    addItem(actionParams, e.item);
-                    if (filterApplied) {
-                        addItemFilter(actionParams, e.item);
-                    }
+                    addItem(actionParams, eventItems);
                 break;
                 case 'reorder':
-                    deleteItem(actionParams['itemId']);
-                    addItem(actionParams, e.item);
+                    actionParams['itemIds'].forEach((itemId) => {
+                        deleteItem(itemId);
+                    });
+                    addItem(actionParams, eventItems);
                     if (filterApplied) {
-                        deleteItemFilter(actionParams['itemId']);
-                        addItemFilter(actionParams, e.item);
+                        actionParams['itemIds'].forEach((itemId) => {
+                            deleteItemFilter(itemId);
+                        });
+                        addItemFilter(actionParams, eventItems);
                     }
                 break;
 
             }
-            if (filterApplied) {
-                paginator.updateData(filterData);
-            } else {
-                paginator.updateData(ulazniPodaciList);
-            }
+            deselectItems();
+
+            setTimeout(() => {
+                if (filterApplied) {
+                    paginator.updateData(filterData);
+                } else {
+                    paginator.updateData(ulazniPodaciList);
+                }
+            }, 1);
         });
     }
 
@@ -311,71 +324,102 @@
         }
     }
 
-    function addItem(params, itemEl){
-        const foundIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['itemId']);
+    function addItem(params, itemElments){
+        const foundIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['itemIds'][0]);
         if (foundIndex === -1) {  // not found
-            const jsonString = unescape(itemEl.getAttribute('x-data'));
-            const jsonObject = JSON.parse(jsonString);
             if (params['prevSiblingId'] === null && params['nextSiblingId'] !== null) {
                 const foundNextIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['nextSiblingId']);
                 if (foundNextIndex !== -1) {
                     if (foundNextIndex > 0) {
-                        ulazniPodaciList.splice(foundNextIndex - 1, 0, jsonObject);
+                        itemElments.forEach((itemEl, elIndex) => {
+                            const jsonString = unescape(itemEl.getAttribute('x-data'));
+                            const jsonObject = JSON.parse(jsonString);
+                            ulazniPodaciList.splice(foundNextIndex - 1 + elIndex, 0, jsonObject);
+                        });
                     } else {
-                        ulazniPodaciList.splice(foundNextIndex, 0, jsonObject);
+                        itemElments.forEach((itemEl, elIndex) => {
+                            const jsonString = unescape(itemEl.getAttribute('x-data'));
+                            const jsonObject = JSON.parse(jsonString);
+                            ulazniPodaciList.splice(foundNextIndex, 0, jsonObject);
+                        });
+
                     }
                 }
             }
             if (params['nextSiblingId'] === null && params['prevSiblingId'] !== null) {
                 const foundPrevIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['prevSiblingId']);
                 if (foundPrevIndex !== -1) {
-                    ulazniPodaciList.splice(foundPrevIndex + 1, 0, jsonObject);
+                    itemElments.forEach((itemEl, elIndex) => {
+                        const jsonString = unescape(itemEl.getAttribute('x-data'));
+                        const jsonObject = JSON.parse(jsonString);
+                        ulazniPodaciList.splice(foundPrevIndex + 1 + elIndex, 0, jsonObject);
+                    });
                 }
             }
             if (params['prevSiblingId'] !== null && params['nextSiblingId'] !== null) {
                 const foundPrevIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['prevSiblingId']);
-                // let foundNextIndex = ulazniPodaciList.findIndex((item) => item['id'] === params['nextSiblingId']);
                 if (foundPrevIndex !== -1) {
-                    ulazniPodaciList.splice(foundPrevIndex + 1, 0, jsonObject);
+                    itemElments.forEach((itemEl, elIndex) => {
+                        const jsonString = unescape(itemEl.getAttribute('x-data'));
+                        const jsonObject = JSON.parse(jsonString);
+                        ulazniPodaciList.splice(foundPrevIndex + 1 + elIndex, 0, jsonObject);
+                    });
                 }
             }
         }
     }
 
-    function addItemFilter(params, itemEl){
-        const foundIndex = filterData.findIndex((item) => item['id'] === params['itemId']);
+    function addItemFilter(params, itemElments){
+        const foundIndex = filterData.findIndex((item) => item['id'] === params['itemIds'][0]);
         if (foundIndex === -1) {  // not found
-            const jsonString = unescape(itemEl.getAttribute('x-data'));
-            const jsonObject = JSON.parse(jsonString);
             if (params['prevSiblingId'] === null && params['nextSiblingId'] !== null) {
                 const foundNextIndex = filterData.findIndex((item) => item['id'] === params['nextSiblingId']);
                 if (foundNextIndex !== -1) {
                     if (foundNextIndex > 0) {
-                        filterData.splice(foundNextIndex - 1, 0, jsonObject);
+                        itemElments.forEach((itemEl, elIndex) => {
+                            const jsonString = unescape(itemEl.getAttribute('x-data'));
+                            const jsonObject = JSON.parse(jsonString);
+                            filterData.splice(foundNextIndex - 1 + elIndex, 0, jsonObject);
+                        });
                     } else {
-                        filterData.splice(foundNextIndex, 0, jsonObject);
+                        itemElments.forEach((itemEl, elIndex) => {
+                            const jsonString = unescape(itemEl.getAttribute('x-data'));
+                            const jsonObject = JSON.parse(jsonString);
+                            filterData.splice(foundNextIndex, 0, jsonObject);
+                        });
+
                     }
                 }
             }
             if (params['nextSiblingId'] === null && params['prevSiblingId'] !== null) {
                 const foundPrevIndex = filterData.findIndex((item) => item['id'] === params['prevSiblingId']);
                 if (foundPrevIndex !== -1) {
-                    filterData.splice(foundPrevIndex + 1, 0, jsonObject);
+                    itemElments.forEach((itemEl, elIndex) => {
+                        const jsonString = unescape(itemEl.getAttribute('x-data'));
+                        const jsonObject = JSON.parse(jsonString);
+                        filterData.splice(foundPrevIndex + 1 + elIndex, 0, jsonObject);
+                    });
                 }
             }
             if (params['prevSiblingId'] !== null && params['nextSiblingId'] !== null) {
                 const foundPrevIndex = filterData.findIndex((item) => item['id'] === params['prevSiblingId']);
                 if (foundPrevIndex !== -1) {
-                    filterData.splice(foundPrevIndex + 1, 0, jsonObject);
+                    itemElments.forEach((itemEl, elIndex) => {
+                        const jsonString = unescape(itemEl.getAttribute('x-data'));
+                        const jsonObject = JSON.parse(jsonString);
+                        filterData.splice(foundPrevIndex + 1 + elIndex, 0, jsonObject);
+                    });
                 }
             }
         }
     }
 
     function detectAction(event) {
+        let itemsElIds = [];
         const fromElId = event.from.getAttribute('id');
         const toElId = event.to.getAttribute('id');
-        const itemElId = event.item.getAttribute('id');
+        const itemElId = itemsElIds.push(event.item.getAttribute('id'));
+        const items = event.items;
         const itemNewIndex = event.newIndex;
         const inputListEl = document.getElementById("ulazniPodaci");
         let prevSiblingElId = null;
@@ -384,8 +428,8 @@
         if (itemNewIndex > 0) {
             prevSiblingElId = inputListEl.children[itemNewIndex-1].getAttribute('id');
         }
-        if (itemNewIndex < inputListEl.children.length - 1) {
-            nextSiblingElId = inputListEl.children[itemNewIndex+1].getAttribute('id');
+        if (itemNewIndex < inputListEl.children.length - 1 - items.length) {
+            nextSiblingElId = inputListEl.children[itemNewIndex + 1 + items.length].getAttribute('id');
         }
 
         let action = '';
@@ -398,14 +442,27 @@
         if (fromElId === 'ulazniPodaci' && toElId === 'ulazniPodaci') {
             action = 'reorder';
         }
+
+        if (items.length > 0) {
+            itemsElIds = [];
+            items.forEach(item => itemsElIds.push(item.getAttribute('id')));
+        }
+
         return {
             action: action,
-            itemId: itemElId,
+            itemIds: itemsElIds,
             nextSiblingId: nextSiblingElId,
             prevSiblingId: prevSiblingElId
         }
     }
 
+    function deselectItems() {
+        var elems = document.querySelectorAll('.sortable-selected');
+        for (var i=0; i<elems.length; i++) {
+            elems[i].click();
+            Sortable.utils.deselect(elems[i]);
+        }
+    }
 
     function generateId(item, index) {
         let idString = index + '_' + item['tvg-id'] + item['tvg-name'] + item['group-title'];
@@ -481,14 +538,22 @@
         a.click();
     }
 
-    Sortable.create(izlazniPodaci, {
+    const izlazniPodaciSortable = Sortable.create(izlazniPodaci, {
         group: 'shared',
-        animation: 100
+        animation: 100,
+        multiDrag: true,
+        selectedClass: 'sortable-selected', // The class applied to the selected items
+	     fallbackTolerance: 3, // So that we can select items on mobile,
+        avoidImplicitDeselect: false
     });
 
-    Sortable.create(ulazniPodaci, {
+    const ulazniPodaciSortable = Sortable.create(ulazniPodaci, {
         group: 'shared',
-        animation: 100
+        animation: 100,
+        multiDrag: true,
+        selectedClass: 'sortable-selected', // The class applied to the selected items
+	    fallbackTolerance: 3, // So that we can select items on mobile
+        avoidImplicitDeselect: false
     });
 </script>
 
